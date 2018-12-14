@@ -1,9 +1,6 @@
 import numpy as np
 from collections import defaultdict
-import random
-import sys
-import math
-import gym
+import random, sys, math, gym
 
 class DropPickAgent:
     """
