@@ -5,8 +5,10 @@ import sys
 import math
 import gym
 
-
-class Agent:
+class SimpleAgent:
+    """
+    Simple, flat Q-learning agent with no prior awareness of problem hierarchy
+    """
 
     def __init__(self, nA=6):
 
@@ -14,8 +16,8 @@ class Agent:
         self.Q = defaultdict(lambda: np.ones(self.nA) * 0.0)
 
         # Learning rate / step size
-        self.alpha = 1
-        self.alpha_decay = 0.999
+        self.alpha = 0.1
+        self.alpha_decay = 0.99999
         self.alpha_min = 0.01
 
         # Discount
