@@ -1,23 +1,28 @@
 import numpy as np
 from collections import defaultdict
 from simple_agent import SimpleAgent
-import random, sys, math, gym
+import random, sys, math, gym, pdb
+
 
 class DecompAgent:
     """
     This agent takes advantage of the problem sub-structure by decomposing the
     root problem into a navigation subproblem (which it solves using a simple
-    Q-learning agent) and using hand-crafted heuristics for any other decisions.
+    Q-learning agent) and using hand-crafted heuristics for all other decisions.
     """
 
     def __init__(self):
 
-        self.sub_agent = SimpleAgent(nA=4)
+        # Only four navigation actions for subproblem actions
+        nA = 4
+        # Only taxi row, column and destination index for subproblem states
+        states_shape = (5, 5, 4)
+        self.sub_agent = SimpleAgent(states_shape=states_shape, nA=nA)
 
         # Learning rate / step size
-        self.sub_agent.alpha = 0.1
-        self.sub_agent.alpha_decay = 0.99999
-        self.sub_agent.alpha_min = 0.01
+        self.sub_agent.alpha = 0.01
+        self.sub_agent.alpha_decay = 1
+        self.sub_agent.alpha_min = 0
 
         # Discount
         self.sub_agent.gamma = 1
@@ -25,7 +30,7 @@ class DecompAgent:
         self.sub_agent.gamma_min = 0
 
         # Exploration
-        self.sub_agent.epsilon = 0
+        self.sub_agent.epsilon = 0.01
         self.sub_agent.epsilon_decay = 1
         self.sub_agent.epsilon_min = 0
 
@@ -36,8 +41,8 @@ class DecompAgent:
         # Environment priors
         self.action_pickup = 4
         self.action_dropoff = 5
-        self.locs = [(0,0), (0,4), (4,0), (4,3)]
-        self.passenger_in_taxi_index = 4
+        self.locs = [(0, 0), (0, 4), (4, 0), (4, 3)]
+        self.passenger_in_taxi_idx = 4
 
         print("alpha: {0}, alpha_decay: {1}, alpha_min: {2}".format(
             self.sub_agent.alpha, self.sub_agent.alpha_decay, self.sub_agent.alpha_min))
@@ -45,7 +50,6 @@ class DecompAgent:
             self.sub_agent.gamma, self.sub_agent.gamma_decay, self.sub_agent.gamma_min))
         print("epsilon: {0}, epsilon_decay: {1}, epsilon_min: {2}".format(
             self.sub_agent.epsilon, self.sub_agent.epsilon_decay, self.sub_agent.epsilon_min))
-
 
     def select_action(self, state):
 
@@ -58,7 +62,6 @@ class DecompAgent:
         # Otherwise, defer to the sub-agent
         transformed_state = self.transform_state(state)
         return self.sub_agent.select_action(transformed_state)
-
 
     def step(self, state, action, reward, next_state, done):
         # Transform experience into the problem space of the sub-agent
@@ -74,7 +77,7 @@ class DecompAgent:
         if self.can_pick_up(next_state) or self.can_drop_off(next_state):
             state_t = self.transform_state(state)
             action_t = self.transform_action(action)
-            reward_t = 20 # end of episode reward
+            reward_t = 9  # end of episode reward
             next_state_t = self.transform_state(next_state)
             done_t = True
 
@@ -91,23 +94,20 @@ class DecompAgent:
         (self.alpha, self.epsilon, self.gamma) = \
             self.sub_agent.alpha, self.sub_agent.epsilon, self.sub_agent.gamma
 
-
     def transform_state(self, state):
         """Transform state into the problem space of the sub-agent"""
 
-        taxi_loc, pass_idx, dest_idx = self.decode_state(state)
+        taxi_row, taxi_col, pass_idx, dest_idx = self.decode_state(state)
 
         # If we don't have the passenger, passenger is our destination
-        if pass_idx != self.passenger_in_taxi_index:
+        if pass_idx != self.passenger_in_taxi_idx:
             dest_idx_t = pass_idx
         # If we have the passenger, destination is our destination
         else:
             dest_idx_t = dest_idx
 
-        # Encode in subprobme state space and return
-        state = self.encode_subproblem_state(taxi_loc, dest_idx_t)
-        return state
-
+        # Encode in subproblem state space and return
+        return (taxi_row, taxi_col, dest_idx_t)
 
     def transform_action(self, action):
         # Action space is the same, minus the final two actions
@@ -115,53 +115,27 @@ class DecompAgent:
         assert action != self.action_dropoff
         return action
 
-
     def can_pick_up(self, state):
-        taxi_loc, pass_idx, dest_idx = self.decode_state(state)
+        taxi_row, taxi_col, pass_idx, dest_idx = self.decode_state(state)
 
-        # Can't pickup whilst in taxi
-        if pass_idx == self.passenger_in_taxi_index:
+        # Can't pickup if passenger already in taxi
+        if pass_idx == self.passenger_in_taxi_idx:
             return False
-        # Otherwise, taxi must be colocated with passenger
-        return taxi_loc == self.locs[pass_idx]
 
+        # Otherwise, taxi must be colocated with passenger
+        return (taxi_row, taxi_col) == self.locs[pass_idx]
 
     def can_drop_off(self, state):
-        taxi_loc, pass_idx, dest_idx = self.decode_state(state)
+        taxi_row, taxi_col, pass_idx, dest_idx = self.decode_state(state)
 
-        # Can't dropoff whilst not in taxi
-        if pass_idx != self.passenger_in_taxi_index:
+        # Can't dropoff if passenger not in taxi
+        if pass_idx != self.passenger_in_taxi_idx:
             return False
+
         # Otherwise, taxi must be colocated with destination
-        return taxi_loc == self.locs[dest_idx]
-
-
-    def encode_subproblem_state(self, taxiloc, destidx):
-        taxirow, taxicol = taxiloc
-        i = taxirow
-        i *= 5
-        i += taxicol
-        i *= 4
-        i += destidx
-        return i
-
-
-    def decode_subproblem_state(self, i):
-        # returns (taxi_row, taxi_column), destination_index
-        out = []
-        out.append(i % 4)
-        i = i // 4
-        out.append(i % 5)
-        i = i // 5
-        out.append(i)
-        assert 0 <= i < 5
-        taxirow, taxicol, dest_idx = reversed(out)
-        taxiloc = (taxirow, taxicol)
-        return taxiloc, dest_idx
-
+        return (taxi_row, taxi_col) == self.locs[dest_idx]
 
     def decode_state(self, i):
-        # returns (taxi_row, taxi_column), passenger_index, destination_index
         out = []
         out.append(i % 4)
         i = i // 4
@@ -171,6 +145,5 @@ class DecompAgent:
         i = i // 5
         out.append(i)
         assert 0 <= i < 5
-        taxirow, taxicol, pass_idx, dest_idx = reversed(out)
-        taxiloc = (taxirow, taxicol)
-        return taxiloc, pass_idx, dest_idx
+        taxi_row, taxi_col, pass_idx, dest_idx = reversed(out)
+        return taxi_row, taxi_col, pass_idx, dest_idx

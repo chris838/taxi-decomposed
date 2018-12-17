@@ -1,16 +1,16 @@
 import numpy as np
 from collections import defaultdict
-import random, sys, math, gym
+import random, sys, math, gym, pdb
 
 class SimpleAgent:
     """
     Simple, flat Q-learning agent with no prior awareness of problem hierarchy
     """
 
-    def __init__(self, nA=6):
+    def __init__(self, states_shape=(500,), nA=6):
 
         self.nA = nA
-        self.Q = defaultdict(lambda: np.ones(self.nA) * 0.0)
+        self.Q = np.zeros( states_shape + (nA,) )
 
         # Learning rate / step size
         self.alpha = 0.1
@@ -48,7 +48,7 @@ class SimpleAgent:
         # Q-learning
         Q = self.Q  # alias
         target = reward + self.gamma * Q[next_state][np.argmax(Q[next_state])]
-        Q[state][action] += self.alpha * (target + Q[state][action])
+        Q[state][action] += self.alpha * (target - Q[state][action])
 
         # Decay exploration, step size and discount over time
         self.alpha = min(1, max(self.alpha_min, self.alpha * self.alpha_decay))

@@ -12,7 +12,7 @@ class DropPickAgent:
     def __init__(self, nA=6):
 
         self.nA = nA
-        self.Q = defaultdict(lambda: np.ones(self.nA) * 0.0)
+        self.Q = defaultdict(lambda: np.ones(self.nA, dtype=np.float64) * 0.0)
 
         # Learning rate / step size
         self.alpha = 0.1
